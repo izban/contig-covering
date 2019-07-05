@@ -4,19 +4,21 @@ typedef long long ll;
 
 const int IMPROVED = 1;
 
-struct tedge {
+struct input_edge {
   string u, v;
   int k;
   char t;
 };
+
 enum type {
-  RED, BLACK
+  SEGMENT, ADJACENCY
 };
+
 struct edge {
   int u, v;
   type t;
-  ll len;
-  int cnt;
+  ll len;   // length of compressed edge
+  int cnt;  // number of compressed edges
 
   bool operator== (const edge &ed) const {
     return ((u == ed.u && v == ed.v) || (u == ed.v && v == ed.u));
@@ -53,6 +55,7 @@ struct dsu {
   }
 };
 
+// find alternating cycle in connected graph
 vector<edge> find_cycle(vector<edge> ed) {
   int n = 0;
   for (auto o : ed) {
@@ -63,7 +66,7 @@ vector<edge> find_cycle(vector<edge> ed) {
 
   vector<vector<vector<int>>> e(n, vector<vector<int>>(2));
   for (int i = 0; i < m; i++) {
-    int t = ed[i].t == BLACK;
+    int t = ed[i].t == ADJACENCY;
     e[ed[i].u][t].push_back(i);
     e[ed[i].v][t].push_back(i);
   }
@@ -97,9 +100,11 @@ vector<edge> find_cycle(vector<edge> ed) {
 }
 
 int count_paths;
-
+// returns set of paths and cycles in decomposition for connected graph
 vector<vector<edge>> solve_connected(vector<edge> ed) {
   if (ed.empty()) return vector<vector<edge>>();
+
+  // renumbering vertices
   vector<int> v;
   for (auto o : ed) {
     v.push_back(o.u);
@@ -120,16 +125,17 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
 
   set<pair<int, int>> st;
   for (auto o : ed) {
-    if (o.t == RED) {
+    if (o.t == SEGMENT) {
       st.insert({o.u, o.v});
     }
   }
+  // replace parallel ADJACENCY and SEGMENT edge to path with 3 edges to simplify implementation
   vector<edge> ned;
   for (auto o : ed) {
-    if (o.t == BLACK && st.find({o.u, o.v}) != st.end()) {
-      ned.push_back({o.u, n, BLACK, 0, 0});
-      ned.push_back({n, n + 1, RED, o.len, o.cnt});
-      ned.push_back({o.v, n + 1, BLACK, 0, 0});
+    if (o.t == ADJACENCY && st.find({o.u, o.v}) != st.end()) {
+      ned.push_back({o.u, n, ADJACENCY, 0, 0});
+      ned.push_back({n, n + 1, SEGMENT, o.len, o.cnt});
+      ned.push_back({o.v, n + 1, ADJACENCY, 0, 0});
       n += 2;
     } else ned.push_back(o);
   }
@@ -137,7 +143,7 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
 
   vector<int> deg(n);
   for (auto o : ed) {
-    if (o.t == RED) {
+    if (o.t == SEGMENT) {
       deg[o.u]++;
       deg[o.v]++;
     } else {
@@ -157,14 +163,14 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
     n += 2;
     for (int i = 0; i < n - 2; i++) {
       for (int j = 0; j < deg[i]; j++) {
-        ed.push_back({i, n - 2, BLACK, 0, 0});
+        ed.push_back({i, n - 2, ADJACENCY, 0, 0});
       }
     }
     assert(sum % 2 == 0);
     for (int i = 0; i < sum / 2; i++) {
-      ed.push_back({n - 2, n - 1, RED, 0, 0});
-      ed.push_back({n - 2, n - 1, RED, 0, 0});
-      ed.push_back({n - 1, n - 1, BLACK, 0, 0});
+      ed.push_back({n - 2, n - 1, SEGMENT, 0, 0});
+      ed.push_back({n - 2, n - 1, SEGMENT, 0, 0});
+      ed.push_back({n - 1, n - 1, ADJACENCY, 0, 0});
     }
   }
   count_paths += max(1, sum / 2);
@@ -177,12 +183,14 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
     if (cycle[(i + 1) % cycle.size()].u != c) swap(cycle[(i + 1) % cycle.size()].u, cycle[(i + 1) % cycle.size()].v);
   }
 
+
+  // compressing edges
   for (int any = 1; any;) {
     any = 0;
     for (int i = 0; i + 2 < (int)cycle.size(); i++) {
-      if (cycle[i].t == BLACK) {
-        assert(cycle[i + 1].t == RED);
-        assert(cycle[i + 2].t == BLACK);
+      if (cycle[i].t == ADJACENCY) {
+        assert(cycle[i + 1].t == SEGMENT);
+        assert(cycle[i + 2].t == ADJACENCY);
 
         int a = cycle[i].u;
         assert(cycle[i].v == cycle[i + 1].u);
@@ -201,7 +209,7 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
           if (cycle[j] == cycle[i]) {
             kx++;
           } else {
-            if (cycle[j].t == RED || cycle[j] == cycle[i + 2] || (cycle[j].u != c && cycle[j].v != c)) {
+            if (cycle[j].t == SEGMENT || cycle[j] == cycle[i + 2] || (cycle[j].u != c && cycle[j].v != c)) {
               kz += cycle[j] == cycle[i + 2];
               oth.push_back(cycle[j]);
             } else {
@@ -212,7 +220,7 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
         int kt = et.size();
         int ky = 0;
         for (int j = 0; j < (int)cycle.size(); j++) {
-          if (cycle[j].t == BLACK && !(cycle[j] == cycle[i]) && (cycle[j].u == b || cycle[j].v == b)) {
+          if (cycle[j].t == ADJACENCY && !(cycle[j] == cycle[i]) && (cycle[j].u == b || cycle[j].v == b)) {
             ky++;
           }
         }
@@ -226,7 +234,7 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
           can_compress = 1;
         } else if (kt == kx) {
           for (auto o : et) {
-            oth.push_back({a, o.go(c), BLACK, 0, 0});
+            oth.push_back({a, o.go(c), ADJACENCY, 0, 0});
           }
           dsu d(n);
           int k = kx;
@@ -249,7 +257,7 @@ vector<vector<edge>> solve_connected(vector<edge> ed) {
           edge nw;
           nw.u = a;
           nw.v = D;
-          nw.t = BLACK;
+          nw.t = ADJACENCY;
           nw.len = cycle[i].len + cycle[i + 1].len + cycle[i + 2].len;
           nw.cnt = cycle[i].cnt + cycle[i + 1].cnt + cycle[i + 2].cnt;
 
@@ -294,7 +302,7 @@ void solve(string file) {
   string s;
 
   count_paths = 0;
-  vector<tedge> ted;
+  vector<input_edge> ted;
   while (getline(in, s)) {
     stringstream ss;
     ss << s;
@@ -331,9 +339,9 @@ void solve(string file) {
     ced.u = getId(o.u);
     ced.v = getId(o.v);
     if (ced.u > ced.v) swap(ced.u, ced.v);
-    ced.t = o.t == 'S' ? RED : BLACK;
+    ced.t = o.t == 'S' ? SEGMENT : ADJACENCY;
     ced.len = abs(getPos(o.u) - getPos(o.v));
-    if (ced.t == BLACK) ced.len = 0;
+    if (ced.t == ADJACENCY) ced.len = 0;
     ced.cnt = 1;
     while (o.k--) {
       ed.push_back(ced);
@@ -342,7 +350,7 @@ void solve(string file) {
 
   vector<int> deg(n);
   for (auto o : ed) {
-    int coef = o.t == RED ? +1 : -1;
+    int coef = o.t == SEGMENT ? +1 : -1;
     deg[o.u] += coef;
     deg[o.v] += coef;
   }
